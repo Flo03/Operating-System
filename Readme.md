@@ -1,17 +1,8 @@
-# Cooperative Multitasking OS Simulator
 
-## Overview
+#  Overview
 This project is a **Java-based simulation of a simple operating system**.  
 It demonstrates how an OS manages multiple programs on a single CPU through **cooperative multitasking** and **round-robin scheduling**.
 
-Key ideas illustrated:
-- Kernel vs. userland separation
-- Process Control Blocks (PCBs)
-- Context switching with a simulated timer interrupt
-- Cooperative multitasking using semaphores
-- Fair scheduling with a round-robin scheduler
-
----
 
 ## Architecture
 
@@ -62,5 +53,5 @@ Every process:
 4. **Processes** run until they call `cooperate()`. If their quantum has expired, control switches to the kernel, which rotates to the next process.
 5. **Console output** shows alternating bursts of `"Hello World"` and `"Goodbye World"`, demonstrating time-sharing on one CPU.
 
----
+
 
