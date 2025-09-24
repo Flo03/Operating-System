@@ -18,32 +18,27 @@ public class OS {
     }
     public static volatile CallType currentCall = CallType.NONE;
 
-    // Bridge into kernelland: start kernel, stop running user (if any), wait for completion
+    // Bridge into kernelland: 1) start kernel, 2) stop running user, 3) wait for completion
     private static void startTheKernel() {
-        if (ki == null) {
-            ki = new Kernel();
-        }
-
-        // New request in flight
+        if (ki == null) { ki = new Kernel(); }
         retVal = null;
 
-        // Enter privileged mode
+        // 1) enter privileged mode
         ki.start();
 
-        // Stop currently running user process, if one exists
-        Scheduler s = ki.getScheduler(); // accessor allowed per spec note
+        // 2) stop currently-running userland (if any)
+        Scheduler s = ki.getScheduler();  // allowed accessor per assignment
         if (s.currentlyRunning != null) {
             s.currentlyRunning.stop();
         }
 
-        // Cold start / general wait: block until kernel sets a return value and clears the call
+        // 3) block until kernel sets return value AND clears call to NONE
         while (retVal == null || currentCall != CallType.NONE) {
-            try { Thread.sleep(10); } catch (InterruptedException ignored) { }
+            try { Thread.sleep(10); } catch (InterruptedException ignored) {}
         }
     }
 
     // ---- Public OS "syscalls" (userland entry points) ----
-
     public static void switchProcess() {
         parameters.clear();
         currentCall = CallType.SwitchProcess;
@@ -51,11 +46,8 @@ public class OS {
     }
 
     public static void Startup(UserlandProcess init) {
-        // Create the kernel, then create initial processes through the normal call path
-        if (ki == null) {
-            ki = new Kernel();
-        }
-        CreateProcess(init, PriorityType.interactive);
+        if (ki == null) { ki = new Kernel(); }
+        CreateProcess(init, PriorityType.realtime);      // give init a strong start
         CreateProcess(new IdleProcess(), PriorityType.background);
     }
 
@@ -65,7 +57,7 @@ public class OS {
         return CreateProcess(up, PriorityType.interactive);
     }
 
-    // For assignment 1, priority is ignored by the scheduler (used in later assignments)
+    // Priority is used by the new multi-queue scheduler
     public static int CreateProcess(UserlandProcess up, PriorityType priority) {
         parameters.clear();
         parameters.add(up);
@@ -75,7 +67,6 @@ public class OS {
         return (int) retVal;
     }
 
-    // ---- Reserved stubs for later assignments ----
     public static int GetPID() {
         parameters.clear();
         currentCall = CallType.GetPID;
@@ -89,13 +80,14 @@ public class OS {
         startTheKernel();
     }
 
-    public static void Sleep(int mills) {
+    public static void Sleep(int milliseconds) {
         parameters.clear();
-        parameters.add(mills);
+        parameters.add(milliseconds);
         currentCall = CallType.Sleep;
         startTheKernel();
     }
 
+    // --- Placeholders retained for future assignments ---
     public static int Open(String s) { return 0; }
     public static void Close(int id) { }
     public static byte[] Read(int id, int size) { return null; }
@@ -108,6 +100,6 @@ public class OS {
     public static int AllocateMemory(int size) { return 0; }
     public static boolean FreeMemory(int pointer, int size) { return false; }
 
-    // Package-private accessor so Kernel can be tested if needed (optional)
+    // Optional accessor for tests
     static Kernel getKernel() { return ki; }
 }
