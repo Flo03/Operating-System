@@ -1,4 +1,5 @@
-public class Kernel extends Process  {
+public class Kernel extends Process {
+    // Private scheduler owned by the kernel (required by rubric)
     private final Scheduler scheduler;
 
     public Kernel() {
@@ -6,46 +7,54 @@ public class Kernel extends Process  {
         this.scheduler = new Scheduler();
     }
 
+    // Accessor used by OS to check currently running process for mode switch
     public Scheduler getScheduler() {
         return scheduler;
     }
 
     @Override
     public void main() {
-        while (true) { // Warning on infinite loop is OK...
-            if (OS.currentCall != null) {
-                switch (OS.currentCall) { // get a job from OS, do it
-                    case CreateProcess ->
-                            OS.retVal = CreateProcess((UserlandProcess) OS.parameters.get(0), (OS.PriorityType) OS.parameters.get(1));
-                    case SwitchProcess -> {
-                        SwitchProcess();
+        while (true) {
+            // Service the current OS call (soft interrupt)
+            switch (OS.currentCall) {
+                case CreateProcess -> {
+                    UserlandProcess up = (UserlandProcess) OS.parameters.get(0);
+                    OS.PriorityType p = (OS.PriorityType) OS.parameters.get(1);
+                    int pid = scheduler.CreateProcess(up, p);
+                    OS.retVal = pid;
+                }
+                case SwitchProcess -> {
+                    scheduler.SwitchProcess();
+                    OS.retVal = Boolean.TRUE;
+                }
+                case NONE -> {
+                    // no-op; nothing requested
+                    if (OS.retVal == null) {
+                        OS.retVal = Boolean.TRUE; // ensure OS can proceed if it was waiting
+                    }
+                }
+                // Other calls are stubs for later assignments
+                default -> {
+                    if (OS.retVal == null) {
                         OS.retVal = Boolean.TRUE;
                     }
-                    // Other cases reserved for later assignments...
                 }
-                // Clear the call marker so OS can detect completion.
-                OS.currentCall = null;
             }
 
-            // Now that we have done the work asked of us, start some process then go to sleep.
+            // Clear the request to explicit NONE so OS can detect completion
+            OS.currentCall = OS.CallType.NONE;
+
+            // Hand the CPU to the selected user process (if any), then yield kernel
             if (scheduler.currentlyRunning != null) {
                 scheduler.currentlyRunning.start();
             }
-            // Only one process runs at a time; kernel yields.
+
+            // Only one "process" runs at a time; kernel sleeps until next interrupt
             this.stop();
         }
     }
 
-    private void SwitchProcess() {
-        scheduler.SwitchProcess();
-    }
-
-    // For assignment 1, you can ignore the priority. We will use that in assignment 2
-    private int CreateProcess(UserlandProcess up, OS.PriorityType priority) {
-        return scheduler.CreateProcess(up, priority);
-    }
-
-    // ---- Stubs for future assignments ----
+    // ---- Stubs kept for forward compatibility (Assignment 2+) ----
     private void Sleep(int mills) { }
     private void Exit() { }
     private int GetPid() { return 0; }

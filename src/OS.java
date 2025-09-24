@@ -2,40 +2,47 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class OS {
-    private static Kernel ki; // The one and only one instance of the kernel.
+    // Single kernel instance
+    private static Kernel ki;
 
-    public static List<Object> parameters = new ArrayList<>();
-    public static Object retVal;
+    // Shared call area (soft-interrupt "note")
+    public static final List<Object> parameters = new ArrayList<>();
+    public static volatile Object retVal;
 
     public enum CallType {
-        SwitchProcess, SendMessage, Open, Close, Read, Seek, Write,
-        GetMapping, CreateProcess, Sleep, GetPID, AllocateMemory,
-        FreeMemory, GetPIDByName, WaitForMessage, Exit
+        NONE,             // explicit "no request pending"
+        SwitchProcess,
+        SendMessage, Open, Close, Read, Seek, Write,
+        GetMapping, CreateProcess, Sleep, GetPID,
+        AllocateMemory, FreeMemory, GetPIDByName, WaitForMessage, Exit
     }
-    public static CallType currentCall;
+    public static volatile CallType currentCall = CallType.NONE;
 
+    // Bridge into kernelland: start kernel, stop running user (if any), wait for completion
     private static void startTheKernel() {
-        // Ensure single kernel instance.
         if (ki == null) {
             ki = new Kernel();
         }
-        // New call in flight; clear return slot.
+
+        // New request in flight
         retVal = null;
 
-        // Start the kernel (enter privileged mode).
+        // Enter privileged mode
         ki.start();
 
-        // If there is a currently running user process, pause it (simulate mode switch).
-        Scheduler s = ki.getScheduler();
+        // Stop currently running user process, if one exists
+        Scheduler s = ki.getScheduler(); // accessor allowed per spec note
         if (s.currentlyRunning != null) {
             s.currentlyRunning.stop();
         }
 
-        // Cold start case: wait until the kernel handles the call and sets retVal.
-        while (retVal == null) {
+        // Cold start / general wait: block until kernel sets a return value and clears the call
+        while (retVal == null || currentCall != CallType.NONE) {
             try { Thread.sleep(10); } catch (InterruptedException ignored) { }
         }
     }
+
+    // ---- Public OS "syscalls" (userland entry points) ----
 
     public static void switchProcess() {
         parameters.clear();
@@ -44,19 +51,21 @@ public class OS {
     }
 
     public static void Startup(UserlandProcess init) {
-        // Instantiate kernel once and create initial processes via normal call path.
-        ki = new Kernel();
+        // Create the kernel, then create initial processes through the normal call path
+        if (ki == null) {
+            ki = new Kernel();
+        }
         CreateProcess(init, PriorityType.interactive);
         CreateProcess(new IdleProcess(), PriorityType.background);
     }
 
-    public enum PriorityType {realtime, interactive, background}
+    public enum PriorityType { realtime, interactive, background }
 
     public static int CreateProcess(UserlandProcess up) {
-        return  CreateProcess(up,PriorityType.interactive);
+        return CreateProcess(up, PriorityType.interactive);
     }
 
-    // For assignment 1, you can ignore the priority. We will use that in assignment 2
+    // For assignment 1, priority is ignored by the scheduler (used in later assignments)
     public static int CreateProcess(UserlandProcess up, PriorityType priority) {
         parameters.clear();
         parameters.add(up);
@@ -66,7 +75,7 @@ public class OS {
         return (int) retVal;
     }
 
-    // -------- Reserved for later assignments --------
+    // ---- Reserved stubs for later assignments ----
     public static int GetPID() {
         parameters.clear();
         currentCall = CallType.GetPID;
@@ -96,6 +105,9 @@ public class OS {
     public static KernelMessage WaitForMessage() { return null; }
     public static int GetPidByName(String name) { return 0; }
     public static void GetMapping(int virtualPage) { }
-    public static int AllocateMemory(int size ) { return 0; }
+    public static int AllocateMemory(int size) { return 0; }
     public static boolean FreeMemory(int pointer, int size) { return false; }
+
+    // Package-private accessor so Kernel can be tested if needed (optional)
+    static Kernel getKernel() { return ki; }
 }

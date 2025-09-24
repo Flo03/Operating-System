@@ -1,9 +1,12 @@
 import java.util.concurrent.Semaphore;
 
+
 /**
  * Base Process abstraction for both userland and kerneland.
  * Implements cooperative multitasking using a Semaphore and a quantum-expired flag.
  */
+
+
 public abstract class Process implements Runnable {
     private final Thread thread;
     protected final Semaphore sem = new Semaphore(0);
