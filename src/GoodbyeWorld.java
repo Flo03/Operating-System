@@ -3,7 +3,7 @@ public class GoodbyeWorld extends UserlandProcess {
     public void main() {
         while (true) {
             System.out.println("Goodbye World");
-            try { Thread.sleep(50); } catch (Exception e) { }
+            OS.Sleep(50);   // exercise Sleep/wakeup path
             cooperate();
         }
     }

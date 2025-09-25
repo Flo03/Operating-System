@@ -1,11 +1,7 @@
 public class IdleProcess extends UserlandProcess {
-    @Override
-    public void main() {
+    @Override public void main() {
         while (true) {
-            try {
-                cooperate();
-                Thread.sleep(50);
-            } catch (Exception e) { }
+            cooperate();  // keep the kernel ticking; DO NOT Sleep here
         }
     }
 }

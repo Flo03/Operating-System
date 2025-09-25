@@ -1,68 +1,56 @@
 import java.util.concurrent.Semaphore;
 
-
-/**
- * Base Process abstraction for both userland and kerneland.
- * Implements cooperative multitasking using a Semaphore and a quantum-expired flag.
- */
-
-
 public abstract class Process implements Runnable {
     private final Thread thread;
-    protected final Semaphore sem = new Semaphore(0);
-    private volatile boolean quantumExpired = false;
+    private final Semaphore sem;
 
     public Process() {
-        // Each Process is a Runnable with its own thread.
-        this.thread = new Thread(this, this.getClass().getSimpleName());
-        this.thread.start();
+        this.sem = new Semaphore(0);               // start blocked until scheduled
+        this.thread = new Thread(this, getClass().getSimpleName() + "-thread");
+        this.thread.start();                       // thread waits on sem until scheduler starts it
     }
 
-    /** Mark this process to yield on its next cooperate() call. */
-    public void requestStop() {
-        quantumExpired = true;
-    }
-
-    /** Program entry for subclasses. Should typically contain an infinite loop. */
+    // Userland code implements this (usually an infinite loop that calls cooperate()).
     public abstract void main();
 
-    /** True when the semaphore has zero permits (i.e., currently stopped). */
-    public boolean isStopped() {
-        return sem.availablePermits() == 0;
-    }
+    // --- Scheduler control primitives ---
 
-    /** True when the underlying Java thread is no longer alive. */
-    public boolean isDone() {
-        return !thread.isAlive();
-    }
-
-    /** Allow this process to run (release a permit). */
+    // Allow this process to run (release exactly one permit).
     public void start() {
         sem.release();
     }
 
-    /** Stop this process (acquire a permit), blocking until available. */
+    // Prevent further immediate runs (ensure 0 permits).
     public void stop() {
-        try {
-            sem.acquire();
-        } catch (InterruptedException ignored) {}
+        sem.drainPermits();
     }
 
-    /** Thread body: wait to be started, then run the "program" main(). */
-    public void run() { // This is called by the Thread - NEVER CALL THIS!!!
-        try {
-            sem.acquire();
-        } catch (InterruptedException ignored) {}
-        main();
+    // Optional hooks/queries
+    public boolean isStopped() { return sem.availablePermits() == 0; }
+    public boolean isDone()    { return !thread.isAlive(); }
+
+    // Optional preemption hook used by PCB; no-op in this cooperative design.
+    public void requestStop() {
+        // intentionally empty
     }
 
-    /** Called frequently by userland. If quantum expired, switch into the kernel. */
-    public void cooperate() {
-        if (quantumExpired) {
-            quantumExpired = false;
-            OS.switchProcess();
-        } else {
-            Thread.yield();
+    // Thread entrypoint: wait until scheduled, then run the process code.
+    @Override
+    public void run() {
+        while (true) {
+            sem.acquireUninterruptibly();  // wait until the scheduler starts us
+            main();                         // user code (will call cooperate() repeatedly)
         }
+    }
+
+    // --- Cooperative yield ---
+    // ALWAYS yield: block this process, trap to kernel, and wait to be rescheduled.
+    public void cooperate() {
+        // 1) Ensure we won't keep running until explicitly scheduled again
+        stop();
+        // 2) Enter kernel to perform a context switch
+        OS.switchProcess();
+        // 3) Block here until the scheduler picks us again
+        sem.acquireUninterruptibly();
     }
 }
