@@ -1,7 +1,8 @@
 public class IdleProcess extends UserlandProcess {
-    @Override public void main() {
+    @Override
+    public void main() {
         while (true) {
-            cooperate();  // keep the kernel ticking; DO NOT Sleep here
+            cooperate(); // don't Sleep here
         }
     }
 }
